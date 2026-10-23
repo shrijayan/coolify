@@ -2733,17 +2733,20 @@ function get_public_ips(): void
 function detect_public_ips(array $columns = ['public_ipv4', 'public_ipv6']): array
 {
     $versions = array_intersect_key(['public_ipv4' => 4, 'public_ipv6' => 6], array_flip($columns));
-    $results = Process::concurrently(function (Pool $pool) use ($versions) {
-        foreach ($versions as $column => $version) {
-            $pool->as($column)->path(__DIR__)->command("curl -{$version}s https://ifconfig.io");
-        }
-    });
 
+    // Look up each address family independently so a timeout or failure in one
+    // lookup (e.g. IPv6 connectivity) does not discard a successful result from
+    // the other (e.g. IPv4). See https://github.com/coollabsio/coolify/issues/12275
     $detected = [];
     foreach ($versions as $column => $version) {
-        $ip = trim($results[$column]->output());
-        if (filter_var($ip, FILTER_VALIDATE_IP, $version === 4 ? FILTER_FLAG_IPV4 : FILTER_FLAG_IPV6) !== false) {
-            $detected[$column] = $ip;
+        try {
+            $result = Process::timeout(10)->run("curl -{$version}s https://ifconfig.io");
+            $ip = trim($result->output());
+            if (filter_var($ip, FILTER_VALIDATE_IP, $version === 4 ? FILTER_FLAG_IPV4 : FILTER_FLAG_IPV6) !== false) {
+                $detected[$column] = $ip;
+            }
+        } catch (Throwable $e) {
+            // Ignore failed/timed-out lookups; the caller keeps the previous value.
         }
     }
 
