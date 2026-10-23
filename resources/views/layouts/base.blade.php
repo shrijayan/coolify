@@ -6,7 +6,20 @@
         // The OS color picker only speaks hex. Convert it once so the whole theme
         // cascade is authored in OKLCH (sRGB -> linear -> OKLab -> OKLCH).
         const srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        const normalizeThemeColor = (color) => {
+            if (typeof color !== 'string') return '#6b16ed';
+            const trimmed = color.trim();
+            const six = trimmed.match(/^#?([a-f\d]{6})$/i);
+            if (six) return '#' + six[1];
+            const three = trimmed.match(/^#?([a-f\d]{3})$/i);
+            if (three) {
+                const c = three[1];
+                return '#' + c.split('').map((ch) => ch + ch).join('');
+            }
+            return '#6b16ed';
+        };
         window.hexToOklch = (hex) => {
+            hex = normalizeThemeColor(hex);
             const [r, g, b] = hex.match(/[a-f\d]{2}/gi).map((channel) => srgbToLinear(parseInt(channel, 16) / 255));
             const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
             const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
@@ -20,6 +33,7 @@
             return `oklch(${(okL * 100).toFixed(2)}% ${chroma.toFixed(4)} ${hue.toFixed(2)})`;
         };
         window.themeAccentForeground = (color) => {
+            color = normalizeThemeColor(color);
             const channels = color.match(/[a-f\d]{2}/gi).map(channel => parseInt(channel, 16) * 0.85 + 255 * 0.15);
             const luminance = channels
                 .map(channel => channel / 255)
